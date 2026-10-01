@@ -1,0 +1,102 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  title       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+}
+
+model Task {
+  id              String      @id @default(uuid())
+  workspaceId     String
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  prompt          String
+  status          String      @default("READY")
+  autoExecute     Boolean     @default(false)
+  nodes           TaskNode[]
+  edges           TaskEdge[]
+  finalArtifact   Artifact?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model TaskNode {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  nodeKey     String
+  title       String
+  description String
+  assignedAi  String
+  status      String   @default("PENDING")
+  promptInput String?
+  rawOutput   String?
+  tokensUsed  Int?
+  latencyMs   Int?
+  createdAt   DateTime @default(now())
+}
+
+model TaskEdge {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fromNodeKey String
+  toNodeKey   String
+}
+
+model Artifact {
+  id        String   @id @default(uuid())
+  taskId    String   @unique
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type      String   @default("MARKDOWN")
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// === Hệ thống chấm công việc nhà (4 bạn ở ghép) ===
+
+// Thành viên trong phòng trọ
+model Housemate {
+  id        String     @id @default(uuid())
+  name      String                          // Tên hiển thị
+  emoji     String                          // Emoji mark phân biệt (🔴🔵🟢🟡)
+  color     String                          // Mã màu hex (#EF4444, #3B82F6, ...)
+  order     Int        @default(0)          // Thứ tự hiển thị (0-3)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  logs      ChoreLog[]
+}
+
+// Công việc nhà (tự tạo, ví dụ: Lấy nước, Quét nhà, ...)
+model Chore {
+  id           String     @id @default(uuid())
+  name         String                       // Tên công việc
+  emoji        String     @default("📋")    // Icon cho công việc
+  currentRound Int        @default(1)       // Lượt hiện tại
+  isActive     Boolean    @default(true)    // Còn sử dụng không
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  logs         ChoreLog[]
+}
+
+// Lịch sử chấm công — mỗi người chỉ được chấm 1 lần/lượt/công việc
+model ChoreLog {
+  id          String    @id @default(uuid())
+  choreId     String
+  chore       Chore     @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  housemateId String
+  housemate   Housemate @relation(fields: [housemateId], references: [id], onDelete: Cascade)
+  round       Int                           // Lượt thứ mấy
+  completedAt DateTime  @default(now())     // Thời điểm hoàn thành
+
+  @@unique([choreId, housemateId, round])   // Mỗi người chỉ 1 lần/lượt
+}
